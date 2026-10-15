@@ -63,15 +63,14 @@ tests/unit/test_health.py: 5 passed
 - **Aplicação**: ✅ Healthy
 - **Storage**: ✅ Healthy
 - **Logs**: ✅ Healthy
-- **FFmpeg**: ❌ Unavailable (precisa ser instalado)
-- **LLM**: ❌ Unavailable (precisa ser configurado)
+- **FFmpeg**: ✅ Healthy (v9.0.2)
+- **LLM**: ❌ Unavailable (opcional para FASE 1)
 
 ## Próximos Passos
 
 Para prosseguir para a FASE 2, é necessário:
 
-1. Instalar o FFmpeg no sistema
-2. Configurar um LLM local (opcional para FASE 2)
+1. Configurar um LLM local (opcional para FASE 2)
 
 ## Comandos Úteis
 
