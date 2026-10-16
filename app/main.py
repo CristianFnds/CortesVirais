@@ -4,12 +4,16 @@ import sys
 
 from app.config import Config
 from app.infrastructure.health import HealthChecker
+from app.api.routes_jobs import router as jobs_router
 
 app = FastAPI(
     title="CortesVirais API",
     description="API para automação de extração de melhores momentos de vídeos",
     version="0.1.0",
 )
+
+# Include routers
+app.include_router(jobs_router)
 
 
 @app.on_event("startup")

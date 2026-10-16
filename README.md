@@ -2,6 +2,16 @@
 
 Ferramenta de automação para identificar e extrair os melhores momentos de vídeos do YouTube, utilizando inteligência artificial local.
 
+## Status Atual
+
+- **FASE 1**: ✅ Concluída - Fundação do projeto
+- **FASE 2**: ✅ Concluída - Download e preparação de mídia
+- **FASE 3**: ⏳ Pendente - Transcrição com timestamps
+- **FASE 4**: ⏳ Pendente - Seleção inteligente dos melhores momentos
+- **FASE 5**: ⏳ Pendente - Geração e validação dos clipes
+- **FASE 6**: ⏳ Pendente - Integração com n8n e Telegram
+- **FASE 7**: ⏳ Pendente - Testes, confiabilidade e otimização
+
 ## Requisitos
 
 - Python 3.10+
