@@ -21,3 +21,6 @@ pytest-cov>=4.1.0
 # Type checking
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+
+
+av<19
