@@ -2,12 +2,14 @@ import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import time
 
 import httpx
 
 from app.config import Config
 from app.models.clip import ClipCandidate
 from app.services.clip_validator import ClipValidator
+from app.infrastructure.logger import get_logger
 
 
 class LLMClientError(Exception):
@@ -32,19 +34,22 @@ CRITÉRIOS DE AVALIAÇÃO:
 6. POTENCIAL VIRAL: O conteúdo tem potencial para engajamento?
 7. DURAÇÃO: O intervalo selecionado tem duração adequada para um clipe curto?
 
-FORMATO DE SAÍDA (JSON):
-{
+FORMATO DE SAÍDA (JSON OBRIGATÓRIO):
+Retorne APENAS um objeto JSON válido, sem markdown, sem texto adicional, sem comentários.
+
+Exemplo de formato:
+{{
   "clips": [
-    {
-      "start": <início em segundos>,
-      "end": <fim em segundos>,
-      "title": "<título curto e atraente do clipe>",
-      "reason": "<justificativa da seleção>",
-      "hook": "<resumo do gancho inicial>",
-      "score": <pontuação de 0 a 1>
-    }
+    {{
+      "start": 120.5,
+      "end": 180.3,
+      "title": "Momento Incrível",
+      "reason": "Contúdo muito relevante",
+      "hook": "Começa com uma pergunta",
+      "score": 0.85
+    }}
   ]
-}
+}}
 
 REGRAS IMPORTANTES:
 - Os timestamps devem ser derivados diretamente dos segmentos da transcrição fornecida
@@ -53,11 +58,12 @@ REGRAS IMPORTANTES:
 - Priorize clipes que funcionam de forma autônoma
 - Retorne no máximo {max_clips} clipes
 - Ordene por relevância (melhor primeiro)
+- RETORNE APENAS O JSON, SEM markdown, SEM texto adicional
 
 TRANSCRIÇÃO DO VÍDEO:
 {transcription}
 
-RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
+RETORNE APENAS O JSON, SEM TEXTO ADICIONAL, SEM markdown."""
 
     def __init__(
         self,
@@ -75,14 +81,7 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
         self.api_url = api_url or Config.LLM_API_URL
         self.model = model or Config.LLM_MODEL
         self.timeout = timeout
-        self.logger = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        if self.logger is None:
-            import logging
-            self.logger = logging.getLogger(__name__)
-        return self.logger
+        self.logger = get_logger(__name__)
 
     def analyze_transcription(
         self,
@@ -121,7 +120,7 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
             transcription=transcription_text,
         )
 
-        self._get_logger().info(
+        self.logger.info(
             "Enviando transcrição para análise LLM: job %s, %d segmentos",
             job_id,
             len(transcription.get("segments", [])),
@@ -131,10 +130,10 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
             # Envia requisição para o LLM
             response = self._call_llm(prompt)
             
-            # Parseia a resposta
-            candidates = self._parse_response(response, job_id)
+            # Parseia a resposta com fallback
+            candidates = self._parse_response_with_fallback(response, job_id)
             
-            self._get_logger().info(
+            self.logger.info(
                 "LLM retornou %d candidatos para job %s",
                 len(candidates),
                 job_id,
@@ -190,12 +189,19 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "Você é um assistente que retorna APENAS JSON válido. Não inclua markdown, nem texto adicional.",
+                                "content": (
+                                    "Você é um assistente que retorna APENAS "
+                                    "JSON válido. Não inclua markdown nem texto adicional."
+                                ),
                             },
                             {"role": "user", "content": prompt},
                         ],
-                        "temperature": 0.3,
+                        "temperature": 0.2,
                         "max_tokens": 4096,
+                        "stream": False,
+                        "chat_template_kwargs": {
+                            "enable_thinking": False,
+                        },
                     },
                     timeout=self.timeout,
                 )
@@ -206,10 +212,19 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
                 )
 
             data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            choice = data.get("choices", [{}])[0]
+            message = choice.get("message", {})
+            content = message.get("content", "")
             
             if not content:
-                raise LLMClientError("LLM retornou resposta vazia")
+                finish_reason = choice.get("finish_reason")
+                usage = data.get("usage", {})
+                raise LLMClientError(
+                    "LLM retornou resposta vazia. "
+                    f"finish_reason={finish_reason}, "
+                    f"usage={usage}, "
+                    f"reasoning_content_presente={bool(message.get('reasoning_content'))}"
+                )
             
             return content
 
@@ -222,6 +237,27 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
             raise LLMClientError("Timeout ao comunicar com o LLM")
         except Exception as e:
             raise LLMClientError(f"Erro ao chamar LLM: {e}")
+
+    def _parse_response_with_fallback(
+        self,
+        response_text: str,
+        job_id: str,
+    ) -> List[ClipCandidate]:
+        """Parseia a resposta do LLM com fallback para JSON inválido.
+        
+        Args:
+            response_text: Texto da resposta.
+            job_id: ID do trabalho.
+            
+        Returns:
+            Lista de ClipCandidates ou lista vazia.
+        """
+        try:
+            return self._parse_response(response_text, job_id)
+        except LLMClientError as e:
+            self.logger.warning(f"Parse falhou para {job_id}: {e}")
+            # Tenta extrair timestamps manualmente como fallback
+            return self._extract_fallback_candidates(response_text, job_id)
 
     def _parse_response(
         self,
@@ -241,8 +277,13 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
             LLMClientError: Se o parse falhar.
         """
         try:
+            # Log da resposta bruta para debug
+            self.logger.debug(f"Resposta bruta do LLM para {job_id}: {response_text[:200]}...")
+            
             # Tenta extrair JSON da resposta (pode ter markdown)
             json_text = self._extract_json(response_text)
+            
+            self.logger.debug(f"JSON extraído para {job_id}: {json_text[:200]}...")
             
             data = json.loads(json_text)
             
@@ -263,8 +304,10 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
             return candidates
 
         except json.JSONDecodeError as e:
+            self.logger.error(f"JSON inválido para {job_id}: {response_text[:500]}")
             raise LLMClientError(f"Resposta do LLM não é JSON válido: {e}")
         except (ValueError, TypeError, KeyError) as e:
+            self.logger.error(f"Erro ao parsear resposta para {job_id}: {e}")
             raise LLMClientError(f"Erro ao parsear resposta do LLM: {e}")
 
     def _extract_json(self, text: str) -> str:
@@ -276,24 +319,71 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL."""
         Returns:
             JSON extraído.
         """
+        import re
+        
+        # Remove texto antes do primeiro {
+        start_brace = text.find("{")
+        if start_brace != -1:
+            text = text[start_brace:]
+        
+        # Remove texto depois do último }
+        end_brace = text.rfind("}")
+        if end_brace != -1:
+            text = text[:end_brace + 1]
+        
         # Tenta usar o texto diretamente primeiro
         try:
             json.loads(text)
-            return text
+            return text.strip()
         except json.JSONDecodeError:
             pass
 
         # Procura por bloco de código markdown
-        import re
         match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
 
-        # Procura por chaves de JSON
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return text[start:end + 1]
-
         # Se nada funcionar, retorna o texto original (vai falhar no parse)
         return text
+
+    def _extract_fallback_candidates(
+        self,
+        response_text: str,
+        job_id: str,
+    ) -> List[ClipCandidate]:
+        """Extrai candidatos como fallback quando JSON falha.
+        
+        Args:
+            response_text: Texto da resposta.
+            job_id: ID do trabalho.
+            
+        Returns:
+            Lista de ClipCandidates ou lista vazia.
+        """
+        import re
+        
+        # Procura por padrões de timestamps no texto
+        pattern = r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*[=:]\s*(.+?)(?=\n|\Z)"
+        matches = re.findall(pattern, response_text, re.IGNORECASE)
+        
+        candidates = []
+        for start, end, title in matches:
+            try:
+                start_time = float(start)
+                end_time = float(end)
+                duration = end_time - start_time
+                
+                # Valida duração
+                if 45 <= duration <= 65:
+                    candidates.append(ClipCandidate(
+                        start=start_time,
+                        end=end_time,
+                        title=title.strip()[:50],
+                        reason="Extrato automático (fallback)",
+                        hook="",
+                        score=0.5,
+                    ))
+            except (ValueError, TypeError):
+                continue
+        
+        return candidates

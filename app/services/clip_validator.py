@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 from app.models.clip import ClipCandidate
+from app.infrastructure.logger import get_logger
 
 
 class ClipValidator:
@@ -24,14 +25,7 @@ class ClipValidator:
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.min_overlap = min_overlap
-        self.logger = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        if self.logger is None:
-            import logging
-            self.logger = logging.getLogger(__name__)
-        return self.logger
+        self.logger = get_logger(__name__)
 
     def validate_candidates(
         self,
@@ -51,7 +45,7 @@ class ClipValidator:
             if self._is_valid(candidate):
                 valid_candidates.append(candidate)
             else:
-                self._get_logger().warning(
+                self.logger.warning(
                     "Clipe inválido removido: %s (%.2f - %.2f)",
                     candidate.title,
                     candidate.start,

@@ -8,6 +8,7 @@ from app.models.job import Job, JobStatus
 from app.models.transcript import Transcript
 from app.models.clip import Clip
 from app.config import Config
+from app.infrastructure.logger import get_logger
 
 
 class JobNotFoundError(Exception):
@@ -25,14 +26,7 @@ class JobManager:
             storage_base: Base do diretório de armazenamento.
         """
         self.storage_base = storage_base or Config.STORAGE_DIR
-        self.logger = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        if self.logger is None:
-            import logging
-            self.logger = logging.getLogger(__name__)
-        return self.logger
+        self.logger = get_logger(__name__)
 
     def _get_job_path(self, job_id: str) -> Path:
         """Retorna o caminho do arquivo de um job.
@@ -79,7 +73,7 @@ class JobManager:
 
         self._save_job(job)
         
-        self._get_logger().info(f"Job criado: {job_id}")
+        self.logger.info(f"Job criado: {job_id}")
         
         return job
 
@@ -185,7 +179,7 @@ class JobManager:
         
         # Valida transição de estado
         if job.status == JobStatus.COMPLETED:
-            self._get_logger().warning(f"Tentativa de atualizar job concluído: {job_id}")
+            self.logger.warning(f"Tentativa de atualizar job concluído: {job_id}")
             return job
         
         job.status = status
@@ -266,7 +260,7 @@ class JobManager:
                             data = json.load(f)
                         jobs.append(self._dict_to_job(data))
                     except (json.JSONDecodeError, KeyError) as e:
-                        self._get_logger().error(f"Erro ao ler job {job_dir.name}: {e}")
+                        self.logger.error(f"Erro ao ler job {job_dir.name}: {e}")
 
         # Ordena por data de criação (mais recente primeiro)
         jobs.sort(key=lambda j: j.created_at, reverse=True)

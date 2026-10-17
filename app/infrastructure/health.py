@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 from app.config import Config
+from app.infrastructure.logger import get_logger
 
 
 class HealthChecker:
@@ -10,12 +11,10 @@ class HealthChecker:
 
     def __init__(self):
         self.config = Config
-        self.logger = None
+        self.logger = get_logger(__name__)
 
     def get_health(self) -> Dict[str, Any]:
         """Retorna o status de saúde de todas as dependências."""
-        if self.logger is None:
-            self.logger = __import__("logging").getLogger(__name__)
 
         details: Dict[str, Any] = {
             "application": self._check_application(),

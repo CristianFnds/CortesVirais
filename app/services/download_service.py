@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from app.config import Config
 from app.services.url_validator import URLValidator, URLValidationError
+from app.infrastructure.logger import get_logger
 
 
 # Caminho para yt-dlp no ambiente virtual
@@ -32,11 +33,7 @@ class DownloadService:
         """
         self.storage_base = storage_base or Config.STORAGE_DIR
         self.validator = URLValidator()
-        self.logger = logging.getLogger(__name__)
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        return self.logger
+        self.logger = get_logger(__name__)
 
     def validate_url(self, url: str) -> Dict[str, Any]:
         """Valida uma URL e retorna seus metadados."""

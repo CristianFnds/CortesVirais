@@ -8,6 +8,7 @@ from app.models.transcript import Transcript
 from app.services.llm_client import LLMClient, LLMClientError
 from app.services.clip_validator import ClipValidator
 from app.config import Config
+from app.infrastructure.logger import get_logger
 
 
 class ClipSelectionError(Exception):
@@ -28,14 +29,7 @@ class ClipSelectionService:
             llm_client: Cliente LLM. Usa padrão se None.
         """
         self.llm_client = llm_client or LLMClient()
-        self.logger = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        if self.logger is None:
-            import logging
-            self.logger = logging.getLogger(__name__)
-        return self.logger
+        self.logger = get_logger(__name__)
 
     def select_clips(
         self,
@@ -64,7 +58,7 @@ class ClipSelectionService:
         Raises:
             ClipSelectionError: Se a seleção falhar.
         """
-        self._get_logger().info(
+        self.logger.info(
             "Iniciando seleção de clipes para job %s",
             job_id,
         )
@@ -107,7 +101,7 @@ class ClipSelectionService:
             
             valid_candidates = validator.validate_candidates(candidates)
 
-            self._get_logger().info(
+            self.logger.info(
                 "Seleção concluída: %d candidatos válidos para job %s",
                 len(valid_candidates),
                 job_id,
@@ -116,10 +110,10 @@ class ClipSelectionService:
             return valid_candidates
 
         except LLMClientError as e:
-            self._get_logger().error("Erro LLM: %s", e)
+            self.logger.error("Erro LLM: %s", e)
             
             if retry_failed:
-                self._get_logger().info("Tentando com parâmetros relaxados...")
+                self.logger.info("Tentando com parâmetros relaxados...")
                 return self._retry_with_fallback(
                     job_id,
                     transcript,
@@ -183,7 +177,7 @@ class ClipSelectionService:
             return candidates
 
         except Exception as e:
-            self._get_logger().error("Fallback falhou: %s", e)
+            self.logger.error("Fallback falhou: %s", e)
             return []
 
     def save_selection(

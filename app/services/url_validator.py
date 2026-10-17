@@ -3,6 +3,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from app.config import Config
+from app.infrastructure.logger import get_logger
 
 
 class URLValidationError(Exception):

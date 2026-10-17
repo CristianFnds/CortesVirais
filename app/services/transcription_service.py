@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.config import Config
 from app.models.transcript import Transcript, Segment
+from app.infrastructure.logger import get_logger
 
 
 class TranscriptionError(Exception):
@@ -34,12 +35,8 @@ class TranscriptionService:
         self.model_name = model_name
         self.device = device
         self.compute_type = compute_type
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._model = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        return self.logger
 
     def _load_model(self):
         """Carrega o modelo Whisper sob demanda."""

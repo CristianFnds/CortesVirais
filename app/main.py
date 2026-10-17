@@ -1,31 +1,49 @@
 from fastapi import FastAPI, status, HTTPException
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import sys
 
 from app.config import Config
 from app.infrastructure.health import HealthChecker
+from app.infrastructure.logger import setup_logging, get_logger
 from app.api.routes_jobs import router as jobs_router
 
-app = FastAPI(
-    title="CortesVirais API",
-    description="API para automação de extração de melhores momentos de vídeos",
-    version="0.1.0",
-)
 
-# Include routers
-app.include_router(jobs_router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Executa durante a inicialização da aplicação."""
-    logger = Config.setup_logging()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gerencia eventos de lifespan da aplicação."""
+    # Startup
+    setup_logging(
+        log_level=Config.LOG_LEVEL,
+        log_file=Config.LOG_FILE,
+        max_bytes=Config.LOG_MAX_BYTES,
+        backup_count=Config.LOG_BACKUP_COUNT
+    )
     logger.info("Starting CortesVirais API")
 
     issues = Config.validate()
     if issues:
         for issue in issues:
             logger.warning(issue)
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down CortesVirais API")
+
+
+app = FastAPI(
+    title="CortesVirais API",
+    description="API para automação de extração de melhores momentos de vídeos",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# Include routers
+app.include_router(jobs_router)
+
+# Logger principal
+logger = get_logger("cortesvirais", log_file=Config.LOG_FILE)
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)

@@ -1,12 +1,15 @@
 from typing import Dict, Any, Optional
 from pathlib import Path
+import time
 
 from app.services.job_manager import JobManager, JobNotFoundError
 from app.services.download_service import DownloadService, DownloadError
 from app.services.transcription_service import TranscriptionService, TranscriptionError
+from app.services.clip_selection_service import ClipSelectionService, ClipSelectionError
 from app.models.job import Job, JobStatus
 from app.models.transcript import Transcript
 from app.config import Config
+from app.infrastructure.logger import get_logger
 
 
 class ProcessingPipelineError(Exception):
@@ -22,6 +25,7 @@ class ProcessingPipeline:
         job_manager: Optional[JobManager] = None,
         download_service: Optional[DownloadService] = None,
         transcription_service: Optional[TranscriptionService] = None,
+        clip_selection_service: Optional[ClipSelectionService] = None,
     ):
         """Inicializa o pipeline.
         
@@ -29,18 +33,13 @@ class ProcessingPipeline:
             job_manager: Gerenciador de jobs.
             download_service: Serviço de download.
             transcription_service: Serviço de transcrição.
+            clip_selection_service: Serviço de seleção de clipes.
         """
         self.job_manager = job_manager or JobManager()
         self.download_service = download_service or DownloadService()
         self.transcription_service = transcription_service or TranscriptionService()
-        self.logger = None
-
-    def _get_logger(self):
-        """Retorna o logger configurado."""
-        if self.logger is None:
-            import logging
-            self.logger = logging.getLogger(__name__)
-        return self.logger
+        self.clip_selection_service = clip_selection_service or ClipSelectionService()
+        self.logger = get_logger(__name__)
 
     def process(
         self,
@@ -63,8 +62,11 @@ class ProcessingPipeline:
         Raises:
             ProcessingPipelineError: Se o processamento falhar.
         """
+        start_time = time.time()
+        
         try:
             # Etapa 1: Download
+            self.logger.log_step_start(job_id, "download", {"url": url})
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.DOWNLOADING,
@@ -84,7 +86,10 @@ class ProcessingPipeline:
                 video_id=download_result["video_id"],
             )
 
+            self.logger.log_step_complete(job_id, "download", duration=time.time() - start_time)
+
             # Etapa 2: Extração de áudio
+            self.logger.log_step_start(job_id, "audio_extraction")
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.AUDIO_EXTRACTED,
@@ -104,7 +109,10 @@ class ProcessingPipeline:
                 video_id=download_result["video_id"],
             )
 
+            self.logger.log_step_complete(job_id, "audio_extraction", duration=time.time() - start_time)
+
             # Etapa 3: Transcrição
+            self.logger.log_step_start(job_id, "transcription", {"detect_language": detect_language})
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.TRANSCRIBING,
@@ -117,12 +125,53 @@ class ProcessingPipeline:
                 language=None if detect_language else language,
             )
 
+            self.logger.log_step_complete(job_id, "transcription", duration=time.time() - start_time)
+
+            # Etapa 4: Seleção de clipes com LLM
+            self.logger.log_step_start(job_id, "clip_selection", {
+                "target_duration": Config.TARGET_DURATION_SECONDS,
+                "min_duration": Config.MIN_DURATION_SECONDS,
+                "max_duration": Config.MAX_DURATION_SECONDS,
+                "max_clips": Config.MAX_CLIPS,
+            })
+            self.job_manager.update_job_status(
+                job_id,
+                JobStatus.ANALYZING,
+                stage="clip_selection",
+            )
+
+            from app.models.clip import ClipCandidate
+            candidates = self.clip_selection_service.select_clips(
+                job_id=job_id,
+                transcript=transcript,
+                target_duration=Config.TARGET_DURATION_SECONDS,
+                min_duration=Config.MIN_DURATION_SECONDS,
+                max_duration=Config.MAX_DURATION_SECONDS,
+                max_clips=Config.MAX_CLIPS,
+            )
+
+            # Salva seleção
+            self.clip_selection_service.save_selection(job_id, candidates)
+
+            for candidate in candidates:
+                self.logger.log_clip_candidate(job_id, {
+                    "title": candidate.title,
+                    "start": candidate.start,
+                    "end": candidate.end,
+                    "score": candidate.score,
+                })
+
+            self.logger.log_step_complete(job_id, "clip_selection", duration=time.time() - start_time)
+
             # Atualiza status para concluído
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.COMPLETED,
                 stage="completed",
             )
+
+            total_duration = time.time() - start_time
+            self.logger.info(f"[JOB:{job_id}] PROCESSAMENTO CONCLUÍDO ({total_duration:.2f}s)")
 
             return {
                 "job_id": job_id,
@@ -132,11 +181,23 @@ class ProcessingPipeline:
                 "audio_path": audio_result["audio_path"],
                 "transcript_segments": len(transcript.segments),
                 "transcript_language": transcript.language,
+                "selected_clips": len(candidates),
+                "clips": [
+                    {
+                        "start": c.start,
+                        "end": c.end,
+                        "title": c.title,
+                        "score": c.score,
+                    }
+                    for c in candidates
+                ],
             }
 
         except JobNotFoundError as e:
+            self.logger.log_error_job(job_id, "initialization", e, "Job não encontrado")
             raise ProcessingPipelineError(f"Job não encontrado: {e}")
         except DownloadError as e:
+            self.logger.log_error_job(job_id, "download", e, "Erro no download")
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.FAILED,
@@ -145,6 +206,7 @@ class ProcessingPipeline:
             )
             raise ProcessingPipelineError(f"Erro no download: {e}")
         except TranscriptionError as e:
+            self.logger.log_error_job(job_id, "transcription", e, "Erro na transcrição")
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.FAILED,
@@ -152,7 +214,17 @@ class ProcessingPipeline:
                 error_message=str(e),
             )
             raise ProcessingPipelineError(f"Erro na transcrição: {e}")
+        except ClipSelectionError as e:
+            self.logger.log_error_job(job_id, "clip_selection", e, "Erro na seleção de clipes")
+            self.job_manager.update_job_status(
+                job_id,
+                JobStatus.FAILED,
+                stage="clip_selection",
+                error_message=str(e),
+            )
+            raise ProcessingPipelineError(f"Erro na seleção de clipes: {e}")
         except Exception as e:
+            self.logger.log_error_job(job_id, "unknown", e, "Erro no pipeline")
             self.job_manager.update_job_status(
                 job_id,
                 JobStatus.FAILED,
