@@ -42,7 +42,7 @@ class Config:
     MAX_CLIPS: int = int(os.getenv("MAX_CLIPS", "5"))
     TARGET_DURATION_SECONDS: int = int(os.getenv("TARGET_DURATION_SECONDS", "60"))
     MIN_DURATION_SECONDS: int = int(os.getenv("MIN_DURATION_SECONDS", "45"))
-    MAX_DURATION_SECONDS: int = int(os.getenv("MAX_DURATION_SECONDS", "65"))
+    MAX_DURATION_SECONDS: int = int(os.getenv("MAX_DURATION_SECONDS", "70"))
 
     # Caminhos
     BASE_DIR: Path = Path(__file__).resolve().parent.parent

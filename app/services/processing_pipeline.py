@@ -6,6 +6,7 @@ from app.services.job_manager import JobManager, JobNotFoundError
 from app.services.download_service import DownloadService, DownloadError
 from app.services.transcription_service import TranscriptionService, TranscriptionError
 from app.services.clip_selection_service import ClipSelectionService, ClipSelectionError
+from app.services.clip_generation_service import ClipGenerationService, ClipGenerationError
 from app.models.job import Job, JobStatus
 from app.models.transcript import Transcript
 from app.config import Config
@@ -26,6 +27,7 @@ class ProcessingPipeline:
         download_service: Optional[DownloadService] = None,
         transcription_service: Optional[TranscriptionService] = None,
         clip_selection_service: Optional[ClipSelectionService] = None,
+        clip_generation_service: Optional[ClipGenerationService] = None,
     ):
         """Inicializa o pipeline.
         
@@ -34,11 +36,13 @@ class ProcessingPipeline:
             download_service: Serviço de download.
             transcription_service: Serviço de transcrição.
             clip_selection_service: Serviço de seleção de clipes.
+            clip_generation_service: Serviço de geração de clipes.
         """
         self.job_manager = job_manager or JobManager()
         self.download_service = download_service or DownloadService()
         self.transcription_service = transcription_service or TranscriptionService()
         self.clip_selection_service = clip_selection_service or ClipSelectionService()
+        self.clip_generation_service = clip_generation_service or ClipGenerationService()
         self.logger = get_logger(__name__)
 
     def process(
@@ -163,6 +167,50 @@ class ProcessingPipeline:
 
             self.logger.log_step_complete(job_id, "clip_selection", duration=time.time() - start_time)
 
+            # Etapa 5: Geração de clipes
+            self.logger.log_step_start(job_id, "clip_generation", {
+                "candidates_count": len(candidates),
+            })
+            self.job_manager.update_job_status(
+                job_id,
+                JobStatus.CUTTING,
+                stage="clip_generation",
+            )
+
+            storage_path = Path(self.job_manager.get_job(job_id).storage_path)
+            audio_files = list(storage_path.glob("*_audio.*"))
+            video_files = list(storage_path.glob("*.mp4"))
+            
+            if not audio_files or not video_files:
+                raise ClipGenerationError("Arquivos de áudio ou vídeo não encontrados")
+
+            generated_clips = self.clip_generation_service.generate_clips(
+                job_id=job_id,
+                audio_path=str(audio_files[0]),
+                video_path=str(video_files[0]),
+                candidates=candidates,
+                output_dir=str(storage_path / "clips"),
+            )
+
+            # Salva informações dos clipes gerados
+            import json
+            clips_data = [
+                {
+                    "clip_id": c.clip_id,
+                    "title": c.candidate_title,
+                    "start": c.start,
+                    "end": c.end,
+                    "duration": c.duration,
+                    "output_path": c.output_path,
+                    "status": c.status,
+                }
+                for c in generated_clips
+            ]
+            with open(storage_path / "generated_clips.json", "w", encoding="utf-8") as f:
+                json.dump(clips_data, f, indent=2)
+
+            self.logger.log_step_complete(job_id, "clip_generation", duration=time.time() - start_time)
+
             # Atualiza status para concluído
             self.job_manager.update_job_status(
                 job_id,
@@ -223,6 +271,15 @@ class ProcessingPipeline:
                 error_message=str(e),
             )
             raise ProcessingPipelineError(f"Erro na seleção de clipes: {e}")
+        except ClipGenerationError as e:
+            self.logger.log_error_job(job_id, "clip_generation", e, "Erro na geração de clipes")
+            self.job_manager.update_job_status(
+                job_id,
+                JobStatus.FAILED,
+                stage="clip_generation",
+                error_message=str(e),
+            )
+            raise ProcessingPipelineError(f"Erro na geração de clipes: {e}")
         except Exception as e:
             self.logger.log_error_job(job_id, "unknown", e, "Erro no pipeline")
             self.job_manager.update_job_status(

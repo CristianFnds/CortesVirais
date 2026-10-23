@@ -50,6 +50,8 @@ class HealthChecker:
             result = subprocess.run(
                 [ffmpeg_path, "-version"],
                 capture_output=True,
+                text=True,
+                encoding='utf-8',
                 timeout=10,
             )
             if result.returncode == 0:

@@ -56,6 +56,7 @@ REGRAS IMPORTANTES:
 - NÃO invente timestamps que não correspondem aos dados reais
 - A duração de cada clipe deve estar entre {min_duration} e {max_duration} segundos
 - Priorize clipes que funcionam de forma autônoma
+- RETORNE NO MÍNIMO 2 trechos candidatos, mesmo que a qualidade seja menor
 - Retorne no máximo {max_clips} clipes
 - Ordene por relevância (melhor primeiro)
 - RETORNE APENAS O JSON, SEM markdown, SEM texto adicional
@@ -374,7 +375,7 @@ RETORNE APENAS O JSON, SEM TEXTO ADICIONAL, SEM markdown."""
                 duration = end_time - start_time
                 
                 # Valida duração
-                if 45 <= duration <= 65:
+                if 43 <= duration <= 72:
                     candidates.append(ClipCandidate(
                         start=start_time,
                         end=end_time,
