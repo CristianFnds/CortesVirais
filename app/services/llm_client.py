@@ -54,11 +54,12 @@ Exemplo de formato:
 REGRAS IMPORTANTES:
 - Os timestamps devem ser derivados diretamente dos segmentos da transcrição fornecida
 - NÃO invente timestamps que não correspondem aos dados reais
-- A duração de cada clipe deve estar entre {min_duration} e {max_duration} segundos
+- A duração de cada clipe deve estar entre {min_duration} e {max_duration} segundos (ESTRITO)
 - Priorize clipes que funcionam de forma autônoma
 - RETORNE NO MÍNIMO 2 trechos candidatos, mesmo que a qualidade seja menor
 - Retorne no máximo {max_clips} clipes
 - Ordene por relevância (melhor primeiro)
+- VERIFIQUE A DURAÇÃO DE CADA CLIPE ANTES DE INCLUIR: (end - start) deve estar entre {min_duration} e {max_duration}
 - RETORNE APENAS O JSON, SEM markdown, SEM texto adicional
 
 TRANSCRIÇÃO DO VÍDEO:

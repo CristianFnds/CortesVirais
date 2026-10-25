@@ -221,6 +221,24 @@ class ProcessingPipeline:
             total_duration = time.time() - start_time
             self.logger.info(f"[JOB:{job_id}] PROCESSAMENTO CONCLUÍDO ({total_duration:.2f}s)")
 
+            # Constrói URLs de download para os clipes gerados
+            base_url = f"http://{Config.PYTHON_HOST}:{Config.PYTHON_PORT}"
+            generated_clips_with_urls = []
+            for clip in generated_clips:
+                if clip.status == "completed" and clip.duration > 0:
+                    # Extrai o nome do arquivo do caminho completo
+                    clip_path = Path(clip.output_path)
+                    filename = clip_path.name
+                    
+                    generated_clips_with_urls.append({
+                        "filename": filename,
+                        "download_url": f"{base_url}/clips/{job_id}/{filename}",
+                        "start": clip.start,
+                        "end": clip.end,
+                        "title": clip.candidate_title,
+                        "score": 0,  # Score não disponível para clipes gerados
+                    })
+            
             return {
                 "job_id": job_id,
                 "status": "completed",
@@ -239,6 +257,7 @@ class ProcessingPipeline:
                     }
                     for c in candidates
                 ],
+                "generated_clips": generated_clips_with_urls,
             }
 
         except JobNotFoundError as e:

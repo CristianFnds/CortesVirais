@@ -7,6 +7,7 @@ from app.config import Config
 from app.infrastructure.health import HealthChecker
 from app.infrastructure.logger import setup_logging, get_logger
 from app.api.routes_jobs import router as jobs_router
+from app.api.routes_clips import router as clips_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(jobs_router)
+app.include_router(clips_router)
 
 # Logger principal
 logger = get_logger("cortesvirais", log_file=Config.LOG_FILE)

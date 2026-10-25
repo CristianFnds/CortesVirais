@@ -19,10 +19,18 @@ class ClipGenerationError(Exception):
 class ClipGenerationService:
     """Serviço de geração de clipes usando FFmpeg."""
 
-    # Tolerâncias para duração (ajustado para MAX_DURATION_SECONDS=70)
+    # Tolerâncias para duração (baseado na configuração do sistema)
     DURATION_TOLERANCE = 2.0  # segundos
-    MIN_ACCEPTABLE_DURATION = 43.0  # segundos (45 - 2)
-    MAX_ACCEPTABLE_DURATION = 72.0  # segundos (70 + 2)
+    
+    @property
+    def MIN_ACCEPTABLE_DURATION(self) -> float:
+        """Duração mínima aceitável baseada na configuração."""
+        return Config.MIN_DURATION_SECONDS - self.DURATION_TOLERANCE
+    
+    @property
+    def MAX_ACCEPTABLE_DURATION(self) -> float:
+        """Duração máxima aceitável baseada na configuração."""
+        return Config.MAX_DURATION_SECONDS + self.DURATION_TOLERANCE
 
     def __init__(self, ffmpeg_path: Optional[str] = None):
         """Inicializa o serviço de geração de clipes.
@@ -189,18 +197,19 @@ class ClipGenerationService:
         
         # Monta comando FFmpeg
         # Usa o vídeo original para manter qualidade, corta pelo tempo
+        # Usa -t em vez de -to para maior precisão na duração
+        duration = end_time - start_time
         cmd = [
             ffmpeg_cmd,
             "-y",  # Sobrescrever saída
             "-ss", str(start_time),  # Início do corte
-            "-to", str(end_time),  # Fim do corte
+            "-t", str(duration),  # Duração do corte
             "-i", video_path,  # Entrada
             "-c:v", "libx264",  # Codec de vídeo
             "-preset", "fast",  # Velocidade de codificação
             "-crf", "23",  # Qualidade (0-51, menor é melhor)
             "-c:a", "aac",  # Codec de áudio
             "-b:a", "128k",  # Bitrate de áudio
-            "-shortest",  # Para quando o mais curto terminar
             "-movflags", "+faststart",  # Otimizar para web
             "-metadata", f"title={title}",  # Metadado de título
             output_path,  # Saída
