@@ -9,8 +9,8 @@ httpx>=0.26.0
 # Configuration
 python-dotenv>=1.0.0
 
-# Audio/Video Processing
-# faster-whisper>=1.0.0  # Requer instalação do C++ redistributable
+# Audio/Video Processing (instalar manualmente)
+# faster-whisper>=1.0.0
 # yt-dlp>=2024.1.0
 
 # Testing
@@ -22,5 +22,5 @@ pytest-cov>=4.1.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
-
+# Video processing
 av<19

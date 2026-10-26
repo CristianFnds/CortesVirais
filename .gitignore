@@ -62,3 +62,27 @@ Thumbs.db
 *.tmp
 *.temp
 *.cache
+
+# Modelos de IA
+*.gguf
+**/models/
+**/cache/
+
+# Configurações do n8n
+n8n_user_data/
+.n8n/
+
+# Configurações do ngrok
+ngrok2/
+ngrok.yml
+
+# Arquivos de benchmark
+*.benchmark
+benchmark_results/
+
+# Resultados de testes
+coverage/
+htmlcov/
+
+# Arquivos temporários do FFmpeg
+*.part
