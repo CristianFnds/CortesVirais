@@ -1,0 +1,201 @@
+{
+  "name": "CortesVirais",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -960,
+        -176
+      ],
+      "id": "09d060a3-7cb8-463a-9152-b103aa4018c2",
+      "name": "Telegram Trigger",
+      "webhookId": "517ec219-8db7-4f4a-b268-d828e3cf7f5a",
+      "credentials": {
+        "telegramApi": {
+          "id": "XBvNbwfT3olyLhSq",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/jobs",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_url\": \"{{ $json.message.link_preview_options.url }}\",\n  \"user_id\": \"{{ $json.message.chat.id }}\",\n  \"options\": {\n    \"additionalProp1\": {}\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -768,
+        -176
+      ],
+      "id": "bd6bd128-214b-4fe5-9718-96e7de67dade",
+      "name": "Create job",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:8000/jobs/{{$json.job_id}}/start",
+        "options": {
+          "timeout": 1800000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -560,
+        -176
+      ],
+      "id": "7079a90c-e7c2-468f-85d1-fde2bc220120",
+      "name": "Start Job",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{ $json.title }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        176,
+        -176
+      ],
+      "id": "727d1f5d-4b61-457c-8a44-0edda5cd0825",
+      "name": "Send a video1",
+      "webhookId": "d61f2ef3-c3b7-4221-b575-b2d9330cf71d",
+      "credentials": {
+        "telegramApi": {
+          "id": "XBvNbwfT3olyLhSq",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "result.generated_clips",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -352,
+        -176
+      ],
+      "id": "cbc1d102-69d4-4e7c-8aa6-4aea6fb844c0",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.download_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -112,
+        -176
+      ],
+      "id": "f391676f-4aca-45ee-840f-05dcce214dff",
+      "name": "Upload Videos"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create job": {
+      "main": [
+        [
+          {
+            "node": "Start Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Job": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a video1": {
+      "main": [
+        []
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Upload Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Videos": {
+      "main": [
+        [
+          {
+            "node": "Send a video1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "1b0f68a8-8cc6-4bdc-9bf9-6d670768f7ac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6ed2894812ab37d7f23401b216e93c293960edd31f7a5b49220da89cfee399d6"
+  },
+  "nodeGroups": [],
+  "id": "4YRNe9uT9BKBulXz",
+  "tags": []
+}
