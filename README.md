@@ -429,26 +429,6 @@ CortesVirais/
 ├── requirements.txt
 └── README.md
 ```
-
-## Documentação Adicional
-
-- [PLANO_DESENVOLVIMENTO.md](PLANO_DESENVOLVIMENTO.md) - Visão completa do projeto
-- [FASE1_SUMMARY.md](FASE1_SUMMARY.md) - Detalhes da FASE 1
-- [FASE2_SUMMARY.md](FASE2_SUMMARY.md) - Detalhes da FASE 2
-- [FASE4_SUMMARY.md](FASE4_SUMMARY.md) - Detalhes da FASE 4
-- [FASE_5_CLIP_GENERATION.md](FASE_5_CLIP_GENERATION.md) - Detalhes da FASE 5
-- [LOGS.md](LOGS.md) - Documentação do sistema de logging
-
 ## Licença
 
 Este projeto é desenvolvido para fins educacionais e de pesquisa.
-
-## Contribuição
-
-Para contribuir:
-
-1. Faça um fork do repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/minha-feature`)
-3. Commit suas alterações (`git commit -m 'Adiciona nova feature'`)
-4. Push para a branch (`git push origin feature/minha-feature`)
-5. Abra um Pull Request
